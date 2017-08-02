@@ -67,7 +67,7 @@ function onWindowResize() {
 function animate() {
   state.controls.update();
   state.renderer.render( state.scene, state.camera );
-  setTimeout( animate , 1000);
+  requestAnimationFrame( animate );
 }
 
 if (module.hot) {
