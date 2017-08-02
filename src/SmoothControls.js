@@ -83,12 +83,31 @@ const fromCameraToFilm3 = camera => {
       .copy(vector_camera)
       .applyMatrix3(M)
 
-    logV(vector_film3);
+    logV(vector_camera)
 
     return vector_film3;
   }
 }
 
+const fromFilm3ToCamera = camera => {
+  const M = new Matrix3()
+  const vector_camera = new Vector3();
+
+  return vector_film3 => {
+    const f = camera.getFocalLength();
+    M.set(
+      1/f, 0, 0,
+      0, 1/f, 0,
+      0, 0, 1,
+    );
+
+    vector_camera
+      .copy(vector_film3)
+      .applyMatrix3(M)
+
+    return vector_camera;
+  }
+}
 const fromWorldToCamera = camera => {
   const q = new Quaternion();
   const vector_camera = new Vector3()
@@ -141,6 +160,7 @@ export default class SmoothControls {
       fromFilm2ToPixels(camera, this),
       fromPixelsToFilm2(camera, this),
       fromFilm2ToFilm3(camera),
+      fromFilm3ToCamera(camera),
     ])
     this.width = 1521;
     this.height = 1312;
@@ -158,7 +178,7 @@ export default class SmoothControls {
     ).normalize();
     const angle = 2 * Math.acos(this.camera.quaternion.w) / PI * 180
     // console.log(axis.x, axis.y, axis.z, angle)
-    // console.log(this.T(this.camera.getWorldDirection()))
+    logV(this.T(this.camera.getWorldDirection()))
     const translatedUp = this.camera.getWorldDirection().clone().add(new Vector3(0, 1, 0));
     // console.log(this.direction, translatedUp);
     logV(this.T(translatedUp))
