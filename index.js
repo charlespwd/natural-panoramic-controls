@@ -23,7 +23,7 @@ function init() {
   state.scene = new THREE.Scene();
   state.camera = new THREE.PerspectiveCamera( 90, window.innerWidth / window.innerHeight, 0.1, 100 );
   state.camera.position.z = 0;
-  state.controls = new SmoothControls( state.camera );
+  state.controls = new SmoothControls(state.camera, state.renderer.domElement);
   var textures = getTexturesFromAtlasFile( "textures/sun_temple_stripe.jpg", 6 );
   var materials = [];
   for ( var i = 0; i < 6; i ++ ) {
@@ -72,6 +72,11 @@ function animate() {
 
 if (module.hot) {
   module.hot.accept('.', function() {
-    location.reload();
+    state.controls = new SmoothControls(state.camera, state.renderer.domElement);
+  })
+  module.hot.accept('./src/SmoothControls.js', function() {
+    state.controls.dispose();
+    const NewSmoothControls = require('./src/SmoothControls').default;
+    state.controls = new NewSmoothControls(state.camera, state.renderer.domElement);
   })
 }

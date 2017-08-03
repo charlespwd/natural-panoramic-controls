@@ -6,7 +6,8 @@ import {
   Matrix3,
 } from 'three';
 import {
-  flow
+  flow,
+  leftPad,
 } from 'lodash';
 
 const pi = Math.PI;
@@ -15,13 +16,18 @@ const PI = pi;
 const logA = x => x < 0 ? x.toFixed(4) : (' ' + x.toFixed(4));
 const logV = v => {
   console.log(
-    logA(v.x),
-    logA(v.y),
-    logA(v.z),
+    '%10.5f %10.5f %10.5f', v.x, v.y, v.z || 0
   )
 }
 
+const logMV = (m, v) => {
+  console.group(m);
+  logV(v)
+  console.groupEnd(m);
+}
+
 const fromPixelsToFilm2 = (camera, state) => {
+  const vector_pixelsC = new Vector2();
   const vector_film2 = new Vector2();
 
   return vector_pixels => {
@@ -34,6 +40,13 @@ const fromPixelsToFilm2 = (camera, state) => {
     const oy = height / 2;
     const sx = width / filmWidth;
     const sy = - height / filmHeight;
+
+    vector_pixelsC.set(
+      vector_pixels.x - ox,
+      vector_pixels.y - oy,
+    );
+
+    logMV('pixels_center', vector_pixelsC);
 
     vector_film2.set(
       (vector_pixels.x - ox) / sx,
@@ -162,8 +175,19 @@ const fromFilm2ToFilm3 = camera => {
   }
 }
 
+const onMouseMove = (T) => {
+  const vector_pixels = new Vector2();
+  return ({ pageX, pageY }) => {
+    vector_pixels.set(pageX, pageY);
+
+    logV(vector_pixels)
+    logMV('world!', T(vector_pixels));
+  }
+}
+
 export default class SmoothControls {
-  constructor(camera) {
+  constructor(camera, node) {
+    this.node = node;
     this.camera = camera;
     this.direction = camera.getWorldDirection();
     this.T = flow([
@@ -176,14 +200,32 @@ export default class SmoothControls {
       fromFilm3ToCamera(camera),
       fromCameraToWorld(camera),
     ])
-    this.width = 1521;
-    this.height = 1312;
+    this.width = window.innerWidth;
+    this.height = window.innerHeight;
     this.enabled = true;
+
+    this.setup();
+  }
+
+  setup() {
+    const T2 = flow([
+      fromPixelsToFilm2(this.camera, this),
+      fromFilm2ToFilm3(this.camera),
+      fromFilm3ToCamera(this.camera),
+      fromCameraToWorld(this.camera),
+    ])
+    this.onMouseMove = onMouseMove(T2);
+
+    this.node.addEventListener('mousemove', this.onMouseMove);
+  }
+
+  dispose() {
+    this.node.removeEventListener('mousemove', this.onMouseMove);
   }
 
   update() {
     if (!this.enabled) return;
-    this.direction.applyEuler(new Euler(0, PI/100, PI/100, 'YXZ'))
+    this.direction.applyEuler(new Euler(0, PI/1500, 0, 'YXZ'))
     this.camera.lookAt(this.direction);
     const axis = new Vector3(
       this.camera.quaternion.x,
@@ -192,7 +234,7 @@ export default class SmoothControls {
     ).normalize();
     const angle = 2 * Math.acos(this.camera.quaternion.w) / PI * 180
     // console.log(axis.x, axis.y, axis.z, angle)
-    logV(this.T(this.camera.getWorldDirection()))
+    // logV(this.T(this.camera.getWorldDirection()))
 
     const translatedUp = this.camera.getWorldDirection().clone().add(new Vector3(0, 1, 0));
     // console.log(this.direction, translatedUp);

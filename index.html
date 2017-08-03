@@ -24,14 +24,32 @@
 			a {
 				color: #ffffff;
 			}
+
+      #centermark {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        content: ' ';
+        background-color: blue;
+        z-index: 1000;
+        width: 5px;
+        height: 5px;
+        transform: translate(-50%, -50%);
+      }
+
+      #container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
 		</style>
 
 	</head>
 	<body>
-		<div id="container"></div>
-		<div id="info">
-			<a href="http://threejs.org" target="_blank" rel="noopener">three.js webgl</a> - cube panorama demo.
-		</div>
+    <div id="container">
+
+    </div>
+    <div id="centermark"></div>
 
     <script src="bundle.js"></script>
 	</body>
