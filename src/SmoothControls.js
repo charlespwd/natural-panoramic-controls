@@ -192,20 +192,34 @@ const getNewWorldDirection = (camera, state) => {
     fromCameraToWorld(camera, state),
   ]);
 
+  const xf_camera = new Vector3();
+  const xi_camera = new Vector3();
+  const x_world = new Vector3();
+  const up = new Vector3(0, 1, 0);
   const q = new Quaternion();
+  const quat = new Quaternion().setFromUnitVectors(camera.up, up);
+  const quatInverse = quat.clone().inverse();
   const axis = new Vector3();
-  const defaultWorldDirection_world = new Vector3(0, 0, -1);
+  const lookAt = new Vector3();
   const worldDirection_world = new Vector3();
   let angle; // in radians
+  let theta;
 
   return (xi_pixels, xf_pixels) => {
-    const xf_camera = p2c(xf_pixels);
-    const xi_world = p2w(xi_pixels);
+    xi_camera
+      .copy(p2c(xi_pixels))
+      .normalize();
+    xf_camera
+      .copy(p2c(xf_pixels))
+      .normalize();
+    x_world
+      .copy(p2w(xi_pixels))
+      .normalize();
 
-    angle = xf_camera.angleTo(xi_world);
-    axis.copy(xf_camera).cross(xi_world).normalize();
-
-    q.setFromAxisAngle(axis, angle);
+    q.setFromUnitVectors(
+      xf_camera,
+      x_world
+    );
 
     return q;
   }
