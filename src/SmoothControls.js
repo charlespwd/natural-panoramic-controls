@@ -4,6 +4,7 @@ import {
   Euler,
   Quaternion,
   Matrix3,
+  Math as Utils,
 } from 'three';
 import {
   flow,
@@ -15,15 +16,15 @@ const PI = pi;
 
 const logA = x => x < 0 ? x.toFixed(4) : (' ' + x.toFixed(4));
 const logV = v => {
-  console.log(
-    '%10.5f %10.5f %10.5f', v.x, v.y, v.z || 0
-  )
+  // console.log(
+  //   '%10.5f %10.5f %10.5f', v.x, v.y, v.z || 0
+  // )
 }
 
 const logMV = (m, v) => {
-  console.group(m);
+  // console.group(m);
   logV(v)
-  console.groupEnd(m);
+  // console.groupEnd(m);
 }
 
 const fromPixelsToFilm2 = (camera, state) => {
@@ -127,10 +128,12 @@ const fromWorldToCamera = camera => {
   const vector_camera = new Vector3()
 
   return vector_world => {
-    vector_camera.copy(vector_world);
-    q.copy(camera.quaternion).inverse();
-    logV(vector_world);
-    return vector_camera.applyQuaternion(q);
+    logMV('v_world', vector_world);
+    return vector_camera
+      .copy(vector_world)
+      .applyQuaternion(
+        q.copy(camera.quaternion).inverse()
+      );
   };
 }
 
@@ -175,69 +178,106 @@ const fromFilm2ToFilm3 = camera => {
   }
 }
 
-const onMouseMove = (T) => {
-  const vector_pixels = new Vector2();
-  return ({ pageX, pageY }) => {
-    vector_pixels.set(pageX, pageY);
+const getNewWorldDirection = (camera, state) => {
+  const p2c = flow([
+    fromPixelsToFilm2(camera, state),
+    fromFilm2ToFilm3(camera, state),
+    fromFilm3ToCamera(camera, state),
+  ])
 
-    logV(vector_pixels)
-    logMV('world!', T(vector_pixels));
+  const p2w = flow([
+    fromPixelsToFilm2(camera, state),
+    fromFilm2ToFilm3(camera, state),
+    fromFilm3ToCamera(camera, state),
+    fromCameraToWorld(camera, state),
+  ]);
+
+  const q = new Quaternion();
+  const axis = new Vector3();
+  const defaultWorldDirection_world = new Vector3(0, 0, -1);
+  const worldDirection_world = new Vector3();
+  let angle; // in radians
+
+  return (xi_pixels, xf_pixels) => {
+    const xf_camera = p2c(xf_pixels);
+    const xi_world = p2w(xi_pixels);
+
+    angle = xf_camera.angleTo(xi_world);
+    axis.copy(xf_camera).cross(xi_world).normalize();
+
+    q.setFromAxisAngle(axis, angle);
+
+    return q;
   }
+}
+
+const STATE = {
+  IDLE: 0,
+  PANNING: 1,
 }
 
 export default class SmoothControls {
   constructor(camera, node) {
+    this.enabled = true;
     this.node = node;
     this.camera = camera;
-    this.direction = camera.getWorldDirection();
-    this.T = flow([
-      fromWorldToCamera(camera),
-      fromCameraToFilm3(camera),
-      fromFilm3ToFilm2(),
-      fromFilm2ToPixels(camera, this),
-      fromPixelsToFilm2(camera, this),
-      fromFilm2ToFilm3(camera),
-      fromFilm3ToCamera(camera),
-      fromCameraToWorld(camera),
-    ])
     this.width = window.innerWidth;
     this.height = window.innerHeight;
-    this.enabled = true;
+
+    this.state = STATE.IDLE;
+    this.vi_pixels = null;
+    this.vf_pixels = null;
 
     this.setup();
   }
 
   setup() {
-    const T2 = flow([
-      fromPixelsToFilm2(this.camera, this),
-      fromFilm2ToFilm3(this.camera),
-      fromFilm3ToCamera(this.camera),
-      fromCameraToWorld(this.camera),
-    ])
-    this.onMouseMove = onMouseMove(T2);
+    this.getNewWorldDirection = getNewWorldDirection(this.camera, this);
 
+    this.node.addEventListener('mousedown', this.onMouseDown);
     this.node.addEventListener('mousemove', this.onMouseMove);
+    this.node.addEventListener('mouseup', this.onMouseUp);
   }
 
   dispose() {
+    this.node.removeEventListener('mousedown', this.onMouseDown);
     this.node.removeEventListener('mousemove', this.onMouseMove);
+    this.node.removeEventListener('mouseup', this.onMouseUp);
   }
 
   update() {
     if (!this.enabled) return;
-    this.direction.applyEuler(new Euler(0, PI/1500, 0, 'YXZ'))
-    this.camera.lookAt(this.direction);
-    const axis = new Vector3(
-      this.camera.quaternion.x,
-      this.camera.quaternion.y,
-      this.camera.quaternion.z,
-    ).normalize();
-    const angle = 2 * Math.acos(this.camera.quaternion.w) / PI * 180
-    // console.log(axis.x, axis.y, axis.z, angle)
-    // logV(this.T(this.camera.getWorldDirection()))
 
-    const translatedUp = this.camera.getWorldDirection().clone().add(new Vector3(0, 1, 0));
-    // console.log(this.direction, translatedUp);
-    // logV(this.T(translatedUp))
+    if (this.state !== STATE.PANNING) return;
+
+    if (!this.vi_pixels && this.vf_pixels) {
+      this.vi_pixels = new Vector2().copy(this.vf_pixels);
+      return;
+    }
+
+    const direction = this.getNewWorldDirection(
+      this.vi_pixels,
+      this.vf_pixels,
+    )
+
+    this.camera.setRotationFromQuaternion(direction);
+
+    this.vi_pixels.copy(this.vf_pixels);
+  }
+
+  onMouseUp = () => {
+    this.state = STATE.IDLE;
+    this.vi_pixels = null;
+    this.vf_pixels = null;
+  }
+
+  onMouseDown = ({ pageX, pageY }) => {
+    this.state = STATE.PANNING;
+    this.vf_pixels = new Vector2(pageX, pageY);
+  }
+
+  onMouseMove = ({ pageX, pageY }) => {
+    if (this.state !== STATE.PANNING) return;
+    this.vf_pixels.set(pageX, pageY);
   }
 }

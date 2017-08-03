@@ -12,6 +12,7 @@
     "babel-cli": "^6.24.1",
     "babel-loader": "^7.1.1",
     "babel-preset-env": "^1.6.0",
+    "babel-preset-stage-0": "^6.24.1",
     "lodash": "^4.17.4",
     "three": "^0.86.0",
     "webpack": "^3.4.1",
