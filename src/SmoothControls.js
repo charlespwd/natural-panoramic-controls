@@ -20,6 +20,7 @@ const {
   sin,
   tan,
   sqrt,
+  PI,
 } = Math;
 
 const FRICTION = 0.00000275;
@@ -199,6 +200,7 @@ const sqrtSolve = (a, b, c) => {
   throw new Error('Assumption not respected!')
 }
 
+// https://math.stackexchange.com/questions/2385860/natural-panoramic-camera-controls
 const getDeltaRotation = (camera, state) => {
   const p2c = flow([
     fromPixelsToFilm2(camera, state),
@@ -250,7 +252,6 @@ const getDeltaRotation = (camera, state) => {
 
       return offset;
     } catch (e) {
-      console.error(e);
       return null;
     }
   }
@@ -262,13 +263,22 @@ const STATE = {
   FLOATING: 2,
 }
 
+
+const TWO_PI = 2 * PI;
+// returns a angle value between 0 and 2*PI
+function normalizedPositiveAngle(angle) {
+  // reduce the angle
+  angle = angle % TWO_PI;
+
+  // force it to be the positive remainder (so that 0 <= angle < TWO_PI)
+  return (angle + TWO_PI) % TWO_PI;
+}
+
 export default class SmoothControls {
   constructor(camera, node) {
     this.enabled = true;
     this.node = node;
     this.camera = camera;
-    this.width = window.innerWidth;
-    this.height = window.innerHeight;
 
     // This line is very important! Our camera is set up with Y = up, -Z = at.
     // Maintainining the up vector between rotations means that the roll angle
@@ -291,6 +301,14 @@ export default class SmoothControls {
     this.setup();
   }
 
+  get width() {
+    return this.node.clientWidth;
+  }
+
+  get height() {
+    return this.node.clientHeight;
+  }
+
   setup() {
     this.getDeltaRotation = getDeltaRotation(this.camera, this);
     this.node.addEventListener('mousedown', this.onMouseDown, false);
@@ -310,6 +328,17 @@ export default class SmoothControls {
     this.node.removeEventListener('touchend', this.onTouchEnd, false);
   }
 
+  rotate(delta) {
+    const phi = normalizedPositiveAngle(this.camera.rotation.x);
+    const isConsideredUpsideDown = PI / 2 < phi && phi < 3 * PI / 2;
+    if (isConsideredUpsideDown) {
+      this.camera.rotation.y -= delta.y;
+    } else {
+      this.camera.rotation.y += delta.y;
+    }
+    this.camera.rotation.x += delta.x;
+  }
+
   update() {
     if (!this.enabled) return;
 
@@ -325,8 +354,7 @@ export default class SmoothControls {
       )
 
       if (delta) {
-        this.camera.rotation.y += delta.y;
-        this.camera.rotation.x += delta.x;
+        this.rotate(delta);
         this.calculateAngularVelocity(delta.y, delta.x);
       }
 
@@ -339,8 +367,7 @@ export default class SmoothControls {
         this.state = STATE.IDLE;
       }
 
-      this.camera.rotation.y += delta.y;
-      this.camera.rotation.x += delta.x;
+      this.rotate(delta);
     }
 
   }
