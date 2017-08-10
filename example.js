@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import SmoothControls from './src/SmoothControls';
+import NaturalPanoramicControls from './src/SmoothControls';
 
 const state = {
   camera: null,

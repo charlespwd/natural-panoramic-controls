@@ -1,6 +1,6 @@
 const webpack = require('webpack');
 module.exports = {
-  entry: './index.js',
+  entry: './example.js',
   output: 'bundle.js',
   devServer: {
     contentBase: '.',
