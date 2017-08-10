@@ -4,34 +4,62 @@ import {
   Euler,
   Quaternion,
   Matrix3,
+  Matrix4,
   Math as Utils,
 } from 'three';
 import {
   flow,
-  leftPad,
 } from 'lodash';
+
+const {
+  abs,
+  acos,
+  asin,
+  atan,
+  cos,
+  sin,
+  tan,
+  sqrt,
+} = Math;
 
 const pi = Math.PI;
 const PI = pi;
 
-const logA = x => x < 0 ? x.toFixed(4) : (' ' + x.toFixed(4));
+const logN = n => n.toFixed(3);
 const logV = v => {
-  // console.log(
-  //   '%10.5f %10.5f %10.5f', v.x, v.y, v.z || 0
-  // )
+  console.log(
+    logN(v.x),
+    logN(v.y),
+    logN(v.z || 0),
+  )
+}
+
+const deg = x => 180 / pi * x
+
+const logQ = q => {
+  console.log(
+    q.x / Math.sqrt(2) * 2,
+    q.y / Math.sqrt(2) * 2,
+    q.z / Math.sqrt(2) * 2,
+    q.w / Math.sqrt(2) * 2,
+  )
+
+  console.log(
+    'theta=', 180 / PI * Math.acos(q.w) * 2,
+  );
 }
 
 const logMV = (m, v) => {
-  // console.group(m);
+  console.group(m);
   logV(v)
-  // console.groupEnd(m);
+  console.groupEnd(m);
 }
 
-const fromPixelsToFilm2 = (camera, state) => {
+export const fromPixelsToFilm2 = (camera, state) => {
   const vector_pixelsC = new Vector2();
   const vector_film2 = new Vector2();
 
-  return vector_pixels => {
+  return (vector_pixels) => {
     const width = state.width;
     const height = state.height;
     const filmWidth = camera.getFilmWidth();
@@ -40,14 +68,12 @@ const fromPixelsToFilm2 = (camera, state) => {
     const ox = width / 2;
     const oy = height / 2;
     const sx = width / filmWidth;
-    const sy = - height / filmHeight;
+    const sy = -height / filmHeight;
 
     vector_pixelsC.set(
       vector_pixels.x - ox,
       vector_pixels.y - oy,
     );
-
-    logMV('pixels_center', vector_pixelsC);
 
     vector_film2.set(
       (vector_pixels.x - ox) / sx,
@@ -58,10 +84,10 @@ const fromPixelsToFilm2 = (camera, state) => {
   };
 }
 
-const fromFilm2ToPixels = (camera, state) => {
+export const fromFilm2ToPixels = (camera, state) => {
   const vector_pixels = new Vector2();
 
-  return vector_film2 => {
+  return (vector_film2) => {
     const width = state.width;
     const height = state.height;
     const filmWidth = camera.getFilmWidth();
@@ -70,7 +96,7 @@ const fromFilm2ToPixels = (camera, state) => {
     const ox = width / 2;
     const oy = height / 2;
     const sx = width / filmWidth;
-    const sy = - height / filmHeight;
+    const sy = -height / filmHeight;
 
     vector_pixels.set(
       sx * vector_film2.x + ox,
@@ -81,11 +107,11 @@ const fromFilm2ToPixels = (camera, state) => {
   };
 };
 
-const fromCameraToFilm3 = camera => {
+export const fromCameraToFilm3 = camera => {
   const M = new Matrix3()
   const vector_film3 = new Vector3();
 
-  return vector_camera => {
+  return (vector_camera) => {
     const f = camera.getFocalLength();
     M.set(
       f, 0, 0,
@@ -97,17 +123,15 @@ const fromCameraToFilm3 = camera => {
       .copy(vector_camera)
       .applyMatrix3(M)
 
-    // logV(vector_camera)
-
     return vector_film3;
   }
 }
 
-const fromFilm3ToCamera = camera => {
+export const fromFilm3ToCamera = camera => {
   const M = new Matrix3()
   const vector_camera = new Vector3();
 
-  return vector_film3 => {
+  return (vector_film3) => {
     const f = camera.getFocalLength();
     M.set(
       1/f, 0, 0,
@@ -123,12 +147,11 @@ const fromFilm3ToCamera = camera => {
   }
 }
 
-const fromWorldToCamera = camera => {
+export const fromWorldToCamera = camera => {
   const q = new Quaternion();
   const vector_camera = new Vector3()
 
   return vector_world => {
-    logMV('v_world', vector_world);
     return vector_camera
       .copy(vector_world)
       .applyQuaternion(
@@ -137,7 +160,7 @@ const fromWorldToCamera = camera => {
   };
 }
 
-const fromCameraToWorld = camera => {
+export const fromCameraToWorld = camera => {
   const vector_world = new Vector3()
 
   return vector_camera => {
@@ -148,7 +171,7 @@ const fromCameraToWorld = camera => {
   };
 }
 
-const fromFilm3ToFilm2 = () => {
+export const fromFilm3ToFilm2 = () => {
   const vector_film2 = new Vector2()
 
   return vector_film3 => {
@@ -161,12 +184,10 @@ const fromFilm3ToFilm2 = () => {
   }
 }
 
-const fromFilm2ToFilm3 = camera => {
+export const fromFilm2ToFilm3 = () => {
   const vector_film3 = new Vector3();
 
   return vector_film2 => {
-    const f = camera.getFocalLength();
-
     vector_film3
       .set(
         vector_film2.x,
@@ -178,32 +199,35 @@ const fromFilm2ToFilm3 = camera => {
   }
 }
 
-const getNewWorldDirection = (camera, state) => {
+const sqrtSolveP = (a, b, c) => (-b + sqrt(b**2 - 4*a*c)) / (2*a);
+const sqrtSolveN = (a, b, c) => (-b - sqrt(b**2 - 4*a*c)) / (2*a);
+const sqrtSolve = (a, b, c) => {
+  let x;
+  x = sqrtSolveP(a, b, c);
+
+  if (Math.abs(x) <= 0.4) {
+    return x;
+  }
+
+  x = sqrtSolveN(a, b, c);
+
+  if (Math.abs(x) <= 0.4) {
+    return x;
+  }
+
+  throw new Error('Assumption not respected!')
+}
+
+const getDeltaRotation = (camera, state) => {
   const p2c = flow([
     fromPixelsToFilm2(camera, state),
     fromFilm2ToFilm3(camera, state),
     fromFilm3ToCamera(camera, state),
   ])
 
-  const p2w = flow([
-    fromPixelsToFilm2(camera, state),
-    fromFilm2ToFilm3(camera, state),
-    fromFilm3ToCamera(camera, state),
-    fromCameraToWorld(camera, state),
-  ]);
-
   const xf_camera = new Vector3();
   const xi_camera = new Vector3();
-  const x_world = new Vector3();
-  const up = new Vector3(0, 1, 0);
-  const q = new Quaternion();
-  const quat = new Quaternion().setFromUnitVectors(camera.up, up);
-  const quatInverse = quat.clone().inverse();
-  const axis = new Vector3();
-  const lookAt = new Vector3();
-  const worldDirection_world = new Vector3();
-  let angle; // in radians
-  let theta;
+  const offset = new Euler();
 
   return (xi_pixels, xf_pixels) => {
     xi_camera
@@ -212,16 +236,42 @@ const getNewWorldDirection = (camera, state) => {
     xf_camera
       .copy(p2c(xf_pixels))
       .normalize();
-    x_world
-      .copy(p2w(xi_pixels))
-      .normalize();
 
-    q.setFromUnitVectors(
-      xf_camera,
-      x_world
-    );
+    const x1 = xi_camera.x;
+    const y1 = xi_camera.y;
+    const z1 = xi_camera.z;
 
-    return q;
+    const x2 = xf_camera.x;
+    const y2 = xf_camera.y;
+    const z2 = xf_camera.z;
+
+    let a;
+    let b;
+    let c;
+
+    try {
+      a = -y2 / 2;
+      b = -z2;
+      c = y2 - y1;
+      const deltaPitch = sqrtSolve(a, b, c);
+
+      a = -x2 / 2;
+      b = deltaPitch * y2 + z2 * (1 - (deltaPitch ** 2) / 2);
+      c = x2 - x1;
+      const deltaYaw = sqrtSolve(a, b, c);
+
+      offset.set(
+        deltaPitch,
+        deltaYaw,
+        0,
+        'YXZ'
+      );
+
+      return offset;
+    } catch (e) {
+      console.error(e);
+      return null;
+    }
   }
 }
 
@@ -237,6 +287,7 @@ export default class SmoothControls {
     this.camera = camera;
     this.width = window.innerWidth;
     this.height = window.innerHeight;
+    this.camera.rotation.reorder('YXZ')
 
     this.state = STATE.IDLE;
     this.vi_pixels = null;
@@ -246,8 +297,7 @@ export default class SmoothControls {
   }
 
   setup() {
-    this.getNewWorldDirection = getNewWorldDirection(this.camera, this);
-
+    this.getDeltaRotation = getDeltaRotation(this.camera, this);
     this.node.addEventListener('mousedown', this.onMouseDown);
     this.node.addEventListener('mousemove', this.onMouseMove);
     this.node.addEventListener('mouseup', this.onMouseUp);
@@ -269,12 +319,15 @@ export default class SmoothControls {
       return;
     }
 
-    const direction = this.getNewWorldDirection(
+    const delta = this.getDeltaRotation(
       this.vi_pixels,
       this.vf_pixels,
     )
 
-    this.camera.setRotationFromQuaternion(direction);
+    if (delta) {
+      this.camera.rotation.y += delta.y;
+      this.camera.rotation.x += delta.x;
+    }
 
     this.vi_pixels.copy(this.vf_pixels);
   }
