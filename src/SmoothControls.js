@@ -22,37 +22,18 @@ const {
   sqrt,
 } = Math;
 
-const pi = Math.PI;
-const PI = pi;
+const FRICTION = 0.00000275;
+const MAX_ROTATIONAL_SPEED = 2 * Math.PI / 1000;
+const bounded = (lower, x, upper) => Math.max(lower, Math.min(x, upper));
 
-const logN = n => n.toFixed(3);
-const logV = v => {
-  console.log(
-    logN(v.x),
-    logN(v.y),
-    logN(v.z || 0),
-  )
-}
+export function dxConstantFriction(t0, ti, tf, v0, uk = FRICTION) {
+  const ti0 = ti - t0;
+  const tf0 = tf - t0;
+  const tf02 = tf0 * tf0;
+  const ti02 = ti0 * ti0;
 
-const deg = x => 180 / pi * x
-
-const logQ = q => {
-  console.log(
-    q.x / Math.sqrt(2) * 2,
-    q.y / Math.sqrt(2) * 2,
-    q.z / Math.sqrt(2) * 2,
-    q.w / Math.sqrt(2) * 2,
-  )
-
-  console.log(
-    'theta=', 180 / PI * Math.acos(q.w) * 2,
-  );
-}
-
-const logMV = (m, v) => {
-  console.group(m);
-  logV(v)
-  console.groupEnd(m);
+  // Drag cannot make you go backward.
+  return Math.max(0, v0 * (tf0 - ti0) - uk * (tf02 - ti02));
 }
 
 export const fromPixelsToFilm2 = (camera, state) => {
@@ -278,6 +259,7 @@ const getDeltaRotation = (camera, state) => {
 const STATE = {
   IDLE: 0,
   PANNING: 1,
+  FLOATING: 2,
 }
 
 export default class SmoothControls {
@@ -287,64 +269,159 @@ export default class SmoothControls {
     this.camera = camera;
     this.width = window.innerWidth;
     this.height = window.innerHeight;
+
+    // This line is very important! Our camera is set up with Y = up, -Z = at.
+    // Maintainining the up vector between rotations means that the roll angle
+    // is zero. YXZ means yaw about Y axis, pitch about X', roll about Z''.
     this.camera.rotation.reorder('YXZ')
 
     this.state = STATE.IDLE;
     this.vi_pixels = null;
     this.vf_pixels = null;
 
+    this.enableDamping = true;
+    this.dampingFactor = FRICTION;
+
+    this.t0 = 0;
+    this.ti = 0;
+    this.tf = 0;
+    this.latestTime = 0;
+    this.delta = new Euler();
+
     this.setup();
   }
 
   setup() {
     this.getDeltaRotation = getDeltaRotation(this.camera, this);
-    this.node.addEventListener('mousedown', this.onMouseDown);
-    this.node.addEventListener('mousemove', this.onMouseMove);
-    this.node.addEventListener('mouseup', this.onMouseUp);
+    this.node.addEventListener('mousedown', this.onMouseDown, false);
+    this.node.addEventListener('mousemove', this.onMouseMove, false);
+    this.node.addEventListener('mouseup', this.onMouseUp, false);
+    this.node.addEventListener('touchstart', this.onTouchStart, false);
+    this.node.addEventListener('touchmove', this.onTouchMove, false);
+    this.node.addEventListener('touchend', this.onTouchEnd, false);
   }
 
   dispose() {
-    this.node.removeEventListener('mousedown', this.onMouseDown);
-    this.node.removeEventListener('mousemove', this.onMouseMove);
-    this.node.removeEventListener('mouseup', this.onMouseUp);
+    this.node.removeEventListener('mousedown', this.onMouseDown, false);
+    this.node.removeEventListener('mousemove', this.onMouseMove, false);
+    this.node.removeEventListener('mouseup', this.onMouseUp, false);
+    this.node.removeEventListener('touchstart', this.onTouchStart, false);
+    this.node.removeEventListener('touchmove', this.onTouchMove, false);
+    this.node.removeEventListener('touchend', this.onTouchEnd, false);
   }
 
   update() {
     if (!this.enabled) return;
 
-    if (this.state !== STATE.PANNING) return;
+    if (this.state === STATE.PANNING) {
+      if (!this.vi_pixels && this.vf_pixels) {
+        this.vi_pixels = new Vector2().copy(this.vf_pixels);
+        return;
+      }
 
-    if (!this.vi_pixels && this.vf_pixels) {
-      this.vi_pixels = new Vector2().copy(this.vf_pixels);
-      return;
-    }
+      const delta = this.getDeltaRotation(
+        this.vi_pixels,
+        this.vf_pixels,
+      )
 
-    const delta = this.getDeltaRotation(
-      this.vi_pixels,
-      this.vf_pixels,
-    )
+      if (delta) {
+        this.camera.rotation.y += delta.y;
+        this.camera.rotation.x += delta.x;
+        this.calculateAngularVelocity(delta.y, delta.x);
+      }
 
-    if (delta) {
+      this.vi_pixels.copy(this.vf_pixels);
+
+    } else if (this.state === STATE.FLOATING) {
+      const delta = this.calculateDampedRotation();
+
+      if (abs(delta.y) <= 0.00001 && abs(delta.x) <= 0.00001) {
+        this.state = STATE.IDLE;
+      }
+
       this.camera.rotation.y += delta.y;
       this.camera.rotation.x += delta.x;
     }
 
-    this.vi_pixels.copy(this.vf_pixels);
   }
 
-  onMouseUp = () => {
-    this.state = STATE.IDLE;
+  calculateAngularVelocity(dtheta, dphi) {
+    const tf = Date.now();
+    const dt = tf - (this.latestTime || tf);
+    if (this.latestTime && dt !== 0) {
+      if (dtheta !== 0) {
+        this.vt0 = bounded(-MAX_ROTATIONAL_SPEED, dtheta / dt, MAX_ROTATIONAL_SPEED);
+      }
+      if (dphi !== 0) {
+        this.vp0 = bounded(-MAX_ROTATIONAL_SPEED, dphi / dt, MAX_ROTATIONAL_SPEED);
+      }
+    }
+    this.latestTime = tf;
+  }
+
+  calculateDampedRotation() {
+    const t0 = this.t0;
+    const ti = this.ti;
+    const tf = Date.now();
+    const vt0 = this.vt0 || 0;
+    const uk = this.dampingFactor;
+    const vp0 = this.vp0 || 0;
+    const tsign = vt0 >= 0 ? 1 : -1;
+    const psign = vp0 >= 0 ? 1 : -1;
+    this.delta.y = tsign * dxConstantFriction(t0, ti, tf, Math.abs(vt0), uk);
+    this.delta.x = psign * dxConstantFriction(t0, ti, tf, Math.abs(vp0), uk);
+    this.ti = tf;
+    return this.delta;
+  }
+
+  ifEnabled = (handler) => (event) => {
+    if (this.enabled) handler(event);
+  }
+
+  startPan = (event, offsetX, offsetY) => {
+    event.preventDefault();
+    this.state = STATE.PANNING;
+    this.vf_pixels = new Vector2(offsetX, offsetY);
+  }
+
+  moveRotate = (event, offsetX, offsetY) => {
+    if (this.state !== STATE.PANNING) return;
+
+    event.preventDefault();
+    this.vf_pixels.set(offsetX, offsetY);
+  }
+
+  stopPan = (event) => {
+    event.preventDefault();
+    this.state = this.enableDamping ? STATE.FLOATING : STATE.IDLE;
     this.vi_pixels = null;
     this.vf_pixels = null;
+    this.latestTime = null;
+    this.delta.x = 0;
+    this.delta.y = 0;
+    this.t0 = Date.now();
+    this.ti = Date.now();
   }
 
-  onMouseDown = ({ pageX, pageY }) => {
-    this.state = STATE.PANNING;
-    this.vf_pixels = new Vector2(pageX, pageY);
-  }
+  onMouseDown = this.ifEnabled((event) => {
+    this.startPan(event, event.pageX, event.pageY);
+  })
 
-  onMouseMove = ({ pageX, pageY }) => {
-    if (this.state !== STATE.PANNING) return;
-    this.vf_pixels.set(pageX, pageY);
-  }
+  onMouseMove = this.ifEnabled((event) => {
+    this.moveRotate(event, event.pageX, event.pageY);
+  })
+
+  onMouseUp = this.ifEnabled(this.stopPan);
+
+  onTouchStart = this.ifEnabled((event) => {
+    const { pageX, pageY } = event.touches[0];
+    this.startPan(event, pageX, pageY);
+  })
+
+  onTouchMove = this.ifEnabled((event) => {
+    const { pageX, pageY } = event.touches[0];
+    this.moveRotate(event, pageX, pageY);
+  })
+
+  onTouchEnd = this.ifEnabled(this.stopPan);
 }
