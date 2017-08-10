@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import NaturalPanoramicControls from './src/SmoothControls';
+import NaturalPanoramicControls from './src/NaturalPanoramicControls';
 
 const state = {
   camera: null,
@@ -23,7 +23,7 @@ function init() {
   state.scene = new THREE.Scene();
   state.camera = new THREE.PerspectiveCamera( 90, window.innerWidth / window.innerHeight, 0.1, 100 );
   state.camera.position.z = 0;
-  state.controls = new SmoothControls(state.camera, state.renderer.domElement);
+  state.controls = new NaturalPanoramicControls(state.camera, state.renderer.domElement);
   var textures = getTexturesFromAtlasFile( "textures/sun_temple_stripe.jpg", 6 );
   var materials = [];
   for ( var i = 0; i < 6; i ++ ) {
@@ -71,12 +71,12 @@ function animate() {
 }
 
 if (module.hot) {
-  module.hot.accept('.', function() {
-    state.controls = new SmoothControls(state.camera, state.renderer.domElement);
+  module.hot.accept('./example.js', function() {
+    state.controls = new NaturalPanoramicControls(state.camera, state.renderer.domElement);
   })
-  module.hot.accept('./src/SmoothControls.js', function() {
+  module.hot.accept('./src/NaturalPanoramicControls.js', function() {
     state.controls.dispose();
-    const NewSmoothControls = require('./src/SmoothControls').default;
-    state.controls = new NewSmoothControls(state.camera, state.renderer.domElement);
+    const NewNaturalPanoramicControls = require('./src/NaturalPanoramicControls').default;
+    state.controls = new NewNaturalPanoramicControls(state.camera, state.renderer.domElement);
   })
 }

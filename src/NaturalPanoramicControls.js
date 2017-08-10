@@ -1,4 +1,3 @@
-/* eslint camelcase: 0, space-infix-ops: 0 */
 // @module NaturalPanoramicControls
 // @author charlespwd
 //
@@ -23,9 +22,10 @@ import {
   Quaternion,
   Matrix3,
 } from 'three';
-import {
-  flow,
-} from 'lodash';
+
+const flow = (fns) => {
+  return x => fns.reduce((acc, f) => f(acc), x);
+}
 
 const {
   abs,
