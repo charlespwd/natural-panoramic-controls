@@ -8,7 +8,9 @@ Dragging your mouse (or panning with your finger) will rotate the camera such
 that the point under your cursor in the world follows your mouse as it is
 being dragged.
 
-Similar to how Google Street View does it.
+It also supports momentum with damping.
+
+The experience is similar to Google Street View's.
 
 ## Demo
 

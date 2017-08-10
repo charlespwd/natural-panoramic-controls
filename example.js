@@ -24,7 +24,7 @@ function init() {
   state.camera = new THREE.PerspectiveCamera( 90, window.innerWidth / window.innerHeight, 0.1, 100 );
   state.camera.position.z = 0;
   state.controls = new NaturalPanoramicControls(state.camera, state.renderer.domElement);
-  var textures = getTexturesFromAtlasFile( "textures/sun_temple_stripe.jpg", 6 );
+  var textures = getTexturesFromAtlasFile( "example/textures/sun_temple_stripe.jpg", 6 );
   var materials = [];
   for ( var i = 0; i < 6; i ++ ) {
     materials.push( new THREE.MeshBasicMaterial( { map: textures[ i ] } ) );
