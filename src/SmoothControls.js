@@ -1,11 +1,27 @@
+/* eslint camelcase: 0, space-infix-ops: 0 */
+// @module NaturalPanoramicControls
+// @author charlespwd
+//
+// NaturalPanoramicControls, camera controls
+//
+// Dragging your mouse (or panning with your finger) will rotate the camera such
+// that the point under your cursor in the world follows your mouse as it is
+// being dragged.
+//
+// Assumptions:
+// 1) the camera position is (0, 0, 0);
+// 2) the camera.up vector is (0, 1, 0);
+// 3) the camera looks through (0, 0, -1);
+//
+// Some background:
+// http://www.cse.psu.edu/~rtc12/CSE486/lecture12.pdf
+// http://www.cse.psu.edu/~rtc12/CSE486/lecture13.pdf
 import {
   Vector2,
   Vector3,
   Euler,
   Quaternion,
   Matrix3,
-  Matrix4,
-  Math as Utils,
 } from 'three';
 import {
   flow,
@@ -13,19 +29,15 @@ import {
 
 const {
   abs,
-  acos,
-  asin,
-  atan,
-  cos,
-  sin,
-  tan,
   sqrt,
+  max,
+  min,
   PI,
 } = Math;
 
 const FRICTION = 0.00000275;
-const MAX_ROTATIONAL_SPEED = 2 * Math.PI / 1000;
-const bounded = (lower, x, upper) => Math.max(lower, Math.min(x, upper));
+const MAX_ROTATIONAL_SPEED = 2 * PI / 1000;
+const bounded = (lower, x, upper) => max(lower, min(x, upper));
 
 export function dxConstantFriction(t0, ti, tf, v0, uk = FRICTION) {
   const ti0 = ti - t0;
@@ -34,7 +46,7 @@ export function dxConstantFriction(t0, ti, tf, v0, uk = FRICTION) {
   const ti02 = ti0 * ti0;
 
   // Drag cannot make you go backward.
-  return Math.max(0, v0 * (tf0 - ti0) - uk * (tf02 - ti02));
+  return max(0, v0 * (tf0 - ti0) - uk * (tf02 - ti02));
 }
 
 export const fromPixelsToFilm2 = (camera, state) => {
@@ -64,7 +76,7 @@ export const fromPixelsToFilm2 = (camera, state) => {
 
     return vector_film2;
   };
-}
+};
 
 export const fromFilm2ToPixels = (camera, state) => {
   const vector_pixels = new Vector2();
@@ -90,7 +102,7 @@ export const fromFilm2ToPixels = (camera, state) => {
 };
 
 export const fromCameraToFilm3 = camera => {
-  const M = new Matrix3()
+  const M = new Matrix3();
   const vector_film3 = new Vector3();
 
   return (vector_camera) => {
@@ -103,47 +115,47 @@ export const fromCameraToFilm3 = camera => {
 
     vector_film3
       .copy(vector_camera)
-      .applyMatrix3(M)
+      .applyMatrix3(M);
 
     return vector_film3;
-  }
-}
+  };
+};
 
 export const fromFilm3ToCamera = camera => {
-  const M = new Matrix3()
+  const M = new Matrix3();
   const vector_camera = new Vector3();
 
   return (vector_film3) => {
     const f = camera.getFocalLength();
     M.set(
-      1/f, 0, 0,
-      0, 1/f, 0,
+      1 / f, 0, 0,
+      0, 1 / f, 0,
       0, 0, 1,
     );
 
     vector_camera
       .copy(vector_film3)
-      .applyMatrix3(M)
+      .applyMatrix3(M);
 
     return vector_camera;
-  }
-}
+  };
+};
 
 export const fromWorldToCamera = camera => {
   const q = new Quaternion();
-  const vector_camera = new Vector3()
+  const vector_camera = new Vector3();
 
-  return vector_world => {
-    return vector_camera
+  return vector_world => (
+    vector_camera
       .copy(vector_world)
       .applyQuaternion(
         q.copy(camera.quaternion).inverse()
-      );
-  };
-}
+      )
+  );
+};
 
 export const fromCameraToWorld = camera => {
-  const vector_world = new Vector3()
+  const vector_world = new Vector3();
 
   return vector_camera => {
     vector_world
@@ -151,10 +163,10 @@ export const fromCameraToWorld = camera => {
       .applyQuaternion(camera.quaternion);
     return vector_world;
   };
-}
+};
 
 export const fromFilm3ToFilm2 = () => {
-  const vector_film2 = new Vector2()
+  const vector_film2 = new Vector2();
 
   return vector_film3 => {
     vector_film2.set(
@@ -163,8 +175,8 @@ export const fromFilm3ToFilm2 = () => {
     );
 
     return vector_film2;
-  }
-}
+  };
+};
 
 export const fromFilm2ToFilm3 = () => {
   const vector_film3 = new Vector3();
@@ -175,11 +187,11 @@ export const fromFilm2ToFilm3 = () => {
         vector_film2.x,
         vector_film2.y,
         -1,
-      )
+      );
 
     return vector_film3;
-  }
-}
+  };
+};
 
 const sqrtSolveP = (a, b, c) => (-b + sqrt(b**2 - 4*a*c)) / (2*a);
 const sqrtSolveN = (a, b, c) => (-b - sqrt(b**2 - 4*a*c)) / (2*a);
@@ -187,26 +199,26 @@ const sqrtSolve = (a, b, c) => {
   let x;
   x = sqrtSolveP(a, b, c);
 
-  if (Math.abs(x) <= 0.4) {
+  if (abs(x) <= 0.4) {
     return x;
   }
 
   x = sqrtSolveN(a, b, c);
 
-  if (Math.abs(x) <= 0.4) {
+  if (abs(x) <= 0.4) {
     return x;
   }
 
-  throw new Error('Assumption not respected!')
-}
+  throw new Error('Assumption not respected!');
+};
 
 // https://math.stackexchange.com/questions/2385860/natural-panoramic-camera-controls
 const getDeltaRotation = (camera, state) => {
-  const p2c = flow([
+  const pixelsToCamera = flow([
     fromPixelsToFilm2(camera, state),
     fromFilm2ToFilm3(camera, state),
     fromFilm3ToCamera(camera, state),
-  ])
+  ]);
 
   const xf_camera = new Vector3();
   const xi_camera = new Vector3();
@@ -214,15 +226,14 @@ const getDeltaRotation = (camera, state) => {
 
   return (xi_pixels, xf_pixels) => {
     xi_camera
-      .copy(p2c(xi_pixels))
+      .copy(pixelsToCamera(xi_pixels))
       .normalize();
     xf_camera
-      .copy(p2c(xf_pixels))
+      .copy(pixelsToCamera(xf_pixels))
       .normalize();
 
     const x1 = xi_camera.x;
     const y1 = xi_camera.y;
-    const z1 = xi_camera.z;
 
     const x2 = xf_camera.x;
     const y2 = xf_camera.y;
@@ -254,27 +265,25 @@ const getDeltaRotation = (camera, state) => {
     } catch (e) {
       return null;
     }
-  }
-}
+  };
+};
 
 const STATE = {
-  IDLE: 0,
+  NOT_MOVING: 0,
   PANNING: 1,
   FLOATING: 2,
-}
-
+};
 
 const TWO_PI = 2 * PI;
 // returns a angle value between 0 and 2*PI
 function normalizedPositiveAngle(angle) {
-  // reduce the angle
-  angle = angle % TWO_PI;
+  const reducedAngle = angle % TWO_PI;
 
   // force it to be the positive remainder (so that 0 <= angle < TWO_PI)
-  return (angle + TWO_PI) % TWO_PI;
+  return (reducedAngle + TWO_PI) % TWO_PI;
 }
 
-export default class SmoothControls {
+export default class NaturalPanoramicControls {
   constructor(camera, node) {
     this.enabled = true;
     this.node = node;
@@ -283,20 +292,24 @@ export default class SmoothControls {
     // This line is very important! Our camera is set up with Y = up, -Z = at.
     // Maintainining the up vector between rotations means that the roll angle
     // is zero. YXZ means yaw about Y axis, pitch about X', roll about Z''.
-    this.camera.rotation.reorder('YXZ')
+    this.camera.rotation.reorder('YXZ');
 
-    this.state = STATE.IDLE;
-    this.vi_pixels = null;
-    this.vf_pixels = null;
+    this.state = STATE.NOT_MOVING;
+    this.vi_pixels = null; // mouse position in pixels at previous frame
+    this.vf_pixels = null; // mouse position in pixels currently
 
     this.enableDamping = true;
     this.dampingFactor = FRICTION;
 
-    this.t0 = 0;
-    this.ti = 0;
-    this.tf = 0;
-    this.latestTime = 0;
-    this.delta = new Euler();
+    this.latestTime = 0; // time at last frame (so we can calculate dtheta / dt)
+    this.delta = new Euler(); // YXZ ordered, y is yaw (aka theta), x is pitch (aka phi)
+
+    // We hold these for momentum based pan.
+    this.t0 = 0; // the time at which you started floating
+    this.ti = 0; // the time at the previous frame
+    this.tf = 0; // the time at the present frame
+    this.vt0 = 0; // the theta velocity you had when you started floating
+    this.vp0 = 0; // the phi velocity you had when you started floating
 
     this.setup();
   }
@@ -351,7 +364,7 @@ export default class SmoothControls {
       const delta = this.getDeltaRotation(
         this.vi_pixels,
         this.vf_pixels,
-      )
+      );
 
       if (delta) {
         this.rotate(delta);
@@ -361,20 +374,19 @@ export default class SmoothControls {
       this.vi_pixels.copy(this.vf_pixels);
 
     } else if (this.state === STATE.FLOATING) {
-      const delta = this.calculateDampedRotation();
+      const delta = this.calculateMomentumBasedDelta();
+      this.rotate(delta);
 
       if (abs(delta.y) <= 0.00001 && abs(delta.x) <= 0.00001) {
-        this.state = STATE.IDLE;
+        this.state = STATE.NOT_MOVING;
       }
-
-      this.rotate(delta);
     }
 
   }
 
   calculateAngularVelocity(dtheta, dphi) {
     const tf = Date.now();
-    const dt = tf - (this.latestTime || tf);
+    const dt = tf - this.latestTime;
     if (this.latestTime && dt !== 0) {
       if (dtheta !== 0) {
         this.vt0 = bounded(-MAX_ROTATIONAL_SPEED, dtheta / dt, MAX_ROTATIONAL_SPEED);
@@ -386,7 +398,7 @@ export default class SmoothControls {
     this.latestTime = tf;
   }
 
-  calculateDampedRotation() {
+  calculateMomentumBasedDelta() {
     const t0 = this.t0;
     const ti = this.ti;
     const tf = Date.now();
@@ -395,8 +407,8 @@ export default class SmoothControls {
     const vp0 = this.vp0 || 0;
     const tsign = vt0 >= 0 ? 1 : -1;
     const psign = vp0 >= 0 ? 1 : -1;
-    this.delta.y = tsign * dxConstantFriction(t0, ti, tf, Math.abs(vt0), uk);
-    this.delta.x = psign * dxConstantFriction(t0, ti, tf, Math.abs(vp0), uk);
+    this.delta.y = tsign * dxConstantFriction(t0, ti, tf, abs(vt0), uk);
+    this.delta.x = psign * dxConstantFriction(t0, ti, tf, abs(vp0), uk);
     this.ti = tf;
     return this.delta;
   }
@@ -413,14 +425,13 @@ export default class SmoothControls {
 
   moveRotate = (event, offsetX, offsetY) => {
     if (this.state !== STATE.PANNING) return;
-
     event.preventDefault();
     this.vf_pixels.set(offsetX, offsetY);
   }
 
   stopPan = (event) => {
     event.preventDefault();
-    this.state = this.enableDamping ? STATE.FLOATING : STATE.IDLE;
+    this.state = this.enableDamping ? STATE.FLOATING : STATE.NOT_MOVING;
     this.vi_pixels = null;
     this.vf_pixels = null;
     this.latestTime = null;
@@ -438,7 +449,9 @@ export default class SmoothControls {
     this.moveRotate(event, event.pageX, event.pageY);
   })
 
-  onMouseUp = this.ifEnabled(this.stopPan);
+  onMouseUp = this.ifEnabled((event) => {
+    this.stopPan(event);
+  });
 
   onTouchStart = this.ifEnabled((event) => {
     const { pageX, pageY } = event.touches[0];
@@ -450,5 +463,7 @@ export default class SmoothControls {
     this.moveRotate(event, pageX, pageY);
   })
 
-  onTouchEnd = this.ifEnabled(this.stopPan);
+  onTouchEnd = this.ifEnabled((event) => {
+    this.stopPan(event);
+  });
 }
