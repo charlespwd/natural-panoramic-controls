@@ -19,3 +19,7 @@ The experience is similar to Google Street View's.
 ## Source
 
 For your projects, you'll need to use [src/NaturalPanoramicControls.js](src/NaturalPanoramicControls.js).
+
+## License
+
+MIT.
